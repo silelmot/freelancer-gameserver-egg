@@ -1,0 +1,100 @@
+{
+    "_comment": "Freelancer Server Egg",
+    "meta": {
+        "version": "PTDL_v1",
+        "update_url": null
+    },
+    "exported_at": "2023-10-10T00:00:00+00:00",
+    "name": "Freelancer",
+    "author": "Dein Name <deine.email@example.com>",
+    "description": "Freelancer Server",
+    "image": "ghcr.io/pterodactyl/yolks:ubuntu",
+    "startup": "./start.sh",
+    "config": {
+        "files": {},
+        "startup": "{\n    \"done\": \"Installation abgeschlossen.\"\n}",
+        "logs": {},
+        "stop": "stop"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\n\n# Setze den Frontend-Modus auf noninteractive\nexport DEBIAN_FRONTEND=noninteractive\nexport TZ=Europe/Berlin\n\n# Aktivieren der i386 Architektur\ndpkg --add-architecture i386\n\n# Update und Installation der notwendigen Pakete\napt-get update\napt-get install -y xvfb fluxbox x11vnc wget unzip wine wine32 winbind novnc websockify winetricks cabextract p7zip-full\n\n# Zeitzone setzen\nln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone\n\n# Aufräumen\nrm -rf /var/lib/apt/lists/*\n\n# Winetricks: DirectPlay, riched30 und vcrun6sp6 installieren\nwinetricks -q directplay riched30 vcrun6sp6\n\n# Skripte in das Serververzeichnis kopieren\nmkdir -p /mnt/server\n\n# Angepasste Skripte herunterladen\ncurl -o /mnt/server/start.sh https://deinserver.com/pfad/zu/start.sh\nchmod +x /mnt/server/start.sh\n\ncurl -o /mnt/server/server_config.sh https://deinserver.com/pfad/zu/server_config.sh\nchmod +x /mnt/server/server_config.sh\n\n# Freelancer.iso herunterladen, falls ISO_URL gesetzt ist\nif [ -n \"${ISO_URL}\" ]; then\n    wget -O /mnt/server/Freelancer.iso \"${ISO_URL}\"\nfi\n\n# Datenverzeichnis erstellen\nmkdir -p /mnt/server/data\n",
+            "container": "ghcr.io/pterodactyl/installers:debian",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Server Name",
+            "description": "Name des Servers",
+            "env_variable": "SERVER_NAME",
+            "default_value": "MyFreelancerServer",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:32"
+        },
+        {
+            "name": "Server Description",
+            "description": "Beschreibung des Servers",
+            "env_variable": "SERVER_DESCRIPTION",
+            "default_value": "A Server for Freelancer",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:128"
+        },
+        {
+            "name": "Server Password",
+            "description": "Passwort für den Server",
+            "env_variable": "SERVER_PASSWORD",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "string|max:16"
+        },
+        {
+            "name": "Allow New Players",
+            "description": "Neue Spieler zulassen (1 = ja, 0 = nein)",
+            "env_variable": "ALLOW_NEW_PLAYERS",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer|in:0,1"
+        },
+        {
+            "name": "Internet Access",
+            "description": "Internet-Zugang aktivieren (1 = ja, 0 = nein)",
+            "env_variable": "INTERNET_ACCESS",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer|in:0,1"
+        },
+        {
+            "name": "PvP Enabled",
+            "description": "PvP aktivieren (1 = ja, 0 = nein)",
+            "env_variable": "PVP_ENABLED",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer|in:0,1"
+        },
+        {
+            "name": "Max Players",
+            "description": "Maximale Spieleranzahl",
+            "env_variable": "MAX_PLAYERS",
+            "default_value": "16",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer|min:1|max:128"
+        },
+        {
+            "name": "ISO URL",
+            "description": "URL zum Herunterladen von Freelancer.iso",
+            "env_variable": "ISO_URL",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "string"
+        }
+    ]
+}
