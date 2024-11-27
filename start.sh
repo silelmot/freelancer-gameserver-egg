@@ -1,89 +1,90 @@
 #!/bin/bash
 
-ISO_URL=${ISO_URL:-""}
+# Dynamischer Pfad zur Serverinstallation
+SERVER_DIR="/mnt/server"
+FREELANCER_DIR="$SERVER_DIR/Freelancer"
+ISO_PATH="$SERVER_DIR/Freelancer.iso"
+TEMP_DIR="$SERVER_DIR/temp_cab"
 
-# Pfad zum Freelancer-Verzeichnis
-FREELANCER_DIR="/mnt/server/Freelancer"
+# Sicherstellen, dass das Datenverzeichnis existiert
+echo "Ensuring data directory exists..."
+mkdir -p "$SERVER_DIR/data"
 
-# Pfad zur ISO-Datei
-ISO_PATH="/mnt/server/Freelancer.iso"
+# Überprüfen, ob Freelancer-Serverdateien bereits vorhanden sind
+if [ -d "$FREELANCER_DIR" ]; then
+    echo "Freelancer server is already installed. Skipping installation steps."
+else
+    echo "Freelancer server files not found. Starting installation process..."
 
-# Sicherstellen, dass /data existiert
-mkdir -p /mnt/server/data
-
-# Erforderliche übergeordnete Verzeichnisse erstellen
-mkdir -p "/root/.wine/drive_c/users/root/My Documents/My Games/Freelancer/Accts"
-
-# Originalverzeichnis entfernen und Symlink erstellen
-rm -rf "/root/.wine/drive_c/users/root/My Documents/My Games/Freelancer/Accts/MultiPlayer"
-ln -s /mnt/server/data "/root/.wine/drive_c/users/root/My Documents/My Games/Freelancer/Accts/MultiPlayer"
-
-cd /mnt/server
-
-# Prüfen, ob die Freelancer-Serverdateien bereits vorhanden sind
-if [ ! -d "$FREELANCER_DIR" ]; then
-    echo "Freelancer-Serverdateien nicht gefunden. Starte Installation aus ISO..."
-
-    # Prüfen, ob eine lokale ISO-Datei eingebunden wurde
+    # Prüfen, ob eine lokale ISO vorhanden ist oder eine URL gesetzt wurde
     if [ -f "$ISO_PATH" ]; then
-        echo "Lokale Freelancer.iso-Datei wird verwendet."
+        echo "Using local ISO: $ISO_PATH"
     elif [ -n "$ISO_URL" ]; then
-        echo "Lade Freelancer.iso von URL: $ISO_URL"
+        echo "Downloading Freelancer.iso from $ISO_URL..."
         wget -O "$ISO_PATH" "$ISO_URL"
+
+        if [ $? -eq 0 ]; then
+            echo "Freelancer.iso downloaded successfully."
+        else
+            echo "Failed to download Freelancer.iso!" >&2
+            exit 1
+        fi
     else
-        echo "Fehler: Keine ISO-Datei gefunden und ISO_URL ist nicht gesetzt."
-        echo "Bitte binde eine lokale ISO-Datei ein oder setze die Umgebungsvariable ISO_URL."
+        echo "No ISO file found and ISO_URL is not set. Cannot proceed with installation." >&2
         exit 1
     fi
 
-    # CAB1.CAB direkt aus der ISO extrahieren
-    echo "Extrahiere CAB1.CAB aus Freelancer.iso..."
-    mkdir -p /mnt/server/temp_cab
+    # ISO entpacken
+    echo "Extracting CAB1.CAB from Freelancer.iso..."
+    mkdir -p "$TEMP_DIR"
+    7z e "$ISO_PATH" CAB1.CAB -o"$TEMP_DIR"
 
-    # Verwende 7z, um CAB1.CAB direkt aus der ISO zu extrahieren
-    7z e "$ISO_PATH" CAB1.CAB -o/mnt/server/temp_cab
-
-    # CAB-Datei entpacken
-    echo "Entpacke Inhalte von CAB1.CAB..."
-    cd /mnt/server/temp_cab
+    echo "Unpacking contents of CAB1.CAB..."
+    cd "$TEMP_DIR"
     cabextract CAB1.CAB
 
-    echo "Kopiere Freelancer-Dateien..."
-
+    echo "Copying Freelancer server files..."
     mkdir -p "$FREELANCER_DIR"
     cp -r Cab1/data "$FREELANCER_DIR/DATA"
     cp -r Cab1/dlls "$FREELANCER_DIR/DLLS"
     cp -r Cab1/exe "$FREELANCER_DIR/EXE"
 
-    # Berechtigungen setzen
+    echo "Setting permissions for server executables..."
     chmod -R +x "$FREELANCER_DIR/EXE"
 
     # Temporäre Dateien entfernen
-    cd /mnt/server
-    rm -rf /mnt/server/temp_cab
+    echo "Cleaning up temporary files..."
+    cd "$SERVER_DIR"
+    rm -rf "$TEMP_DIR"
 
-    echo "Installation abgeschlossen."
-else
-    echo "Freelancer-Serverdateien bereits vorhanden. Überspringe Installation."
+    echo "Freelancer server installation completed."
 fi
 
+# Symlink für Accounts-Verzeichnis erstellen
+echo "Ensuring symlink for Multiplayer accounts..."
+rm -rf "/root/.wine/drive_c/users/root/My Documents/My Games/Freelancer/Accts/MultiPlayer"
+ln -s "$SERVER_DIR/data" "/root/.wine/drive_c/users/root/My Documents/My Games/Freelancer/Accts/MultiPlayer"
+
 # Display und VNC einrichten
+echo "Setting up VNC display..."
 export DISPLAY=:1
 Xvfb $DISPLAY -screen 0 1024x768x16 &
 fluxbox &
 x11vnc -display $DISPLAY -bg -forever -nopw -quiet -rfbport 5909 &
 
-# noVNC starten und auf allen Schnittstellen verfügbar machen
+# noVNC starten
+echo "Starting noVNC service..."
 websockify --web=/usr/share/novnc/ --wrap-mode=ignore 0.0.0.0:6080 localhost:5909 &
-echo "noVNC gestartet: Zugriff unter http://deinserverip:6080"
 
 # Konfigurationsskript ausführen
-cd /mnt/server/
-./server_config.sh
+echo "Running server configuration script..."
+"$SERVER_DIR/server_config.sh"
 
-# Freelancer starten
+# Freelancer-Server starten
+echo "Starting Freelancer server..."
 cd "$FREELANCER_DIR/EXE"
 wine ./FLServer.exe /c
 
 # Container am Laufen halten
+echo "Freelancer server is running. Keeping container alive..."
 tail -f /dev/null
